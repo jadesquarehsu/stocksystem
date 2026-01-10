@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>庫存查詢 (動態尺寸版)</title>
+    <title>庫存查詢 (含價格)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
@@ -12,6 +12,7 @@
             --card-bg: #ffffff;
             --text-main: #1d1d1f;
             --text-sub: #86868b;
+            --price-color: #d70015; /* 價格用顯眼的紅色 */
         }
 
         body {
@@ -23,305 +24,60 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* 頂部搜尋區 */
         .header-area {
-            position: sticky;
-            top: 0;
-            background-color: var(--bg);
-            padding-bottom: 10px;
-            z-index: 10;
+            position: sticky; top: 0; background-color: var(--bg); padding-bottom: 10px; z-index: 10;
         }
-
         .search-box {
-            display: flex;
-            gap: 10px;
-            background: white;
-            padding: 10px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex; gap: 10px; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-
-        input {
-            flex: 1;
-            border: none;
-            font-size: 16px;
-            outline: none;
-            background: transparent;
-        }
-
-        .scan-btn {
-            background: none;
-            border: none;
-            font-size: 22px;
-            cursor: pointer;
-        }
+        input { flex: 1; border: none; font-size: 16px; outline: none; background: transparent; }
+        .scan-btn { background: none; border: none; font-size: 22px; cursor: pointer; }
 
         /* 商品卡片 */
         .product-card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            animation: fadeIn 0.3s ease;
+            background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); animation: fadeIn 0.3s ease;
         }
 
         .card-header {
-            border-bottom: 1px solid #eee;
-            padding-bottom: 15px;
-            margin-bottom: 15px;
+            border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
+        }
+
+        /* 標題與價格的排版容器 */
+        .title-row {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
         }
 
         .card-title {
-            font-size: 1.1rem; /* 稍微調小一點適應長編碼 */
-            font-weight: 700;
-            margin: 0 0 5px 0;
-            word-break: break-all; /* 防止長型號跑版 */
+            font-size: 1.1rem; font-weight: 700; margin: 0; word-break: break-all;
+            flex: 1; /* 讓標題佔據剩下的空間 */
+        }
+
+        /* 價格樣式 */
+        .price-tag {
+            font-size: 1.2rem; font-weight: 800; color: var(--price-color);
+            white-space: nowrap; /* 價格不換行 */
         }
 
         .card-subtitle {
-            font-size: 0.9rem;
-            color: var(--text-sub);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            font-size: 0.9rem; color: var(--text-sub); margin-top: 5px;
         }
 
-        /* 顏色分組 */
         .color-group { margin-bottom: 20px; }
-        
-        .color-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .color-title { font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #ddd; display: inline-block; background: #ccc; }
 
-        .color-dot {
-            width: 12px; height: 12px;
-            border-radius: 50%; border: 1px solid #ddd;
-            display: inline-block;
-            background: #ccc; /* 預設灰色 */
-        }
-
-        /* 尺寸網格 - 使用 auto-fill 讓格子更靈活 */
-        .size-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr); /* 手機版維持一行四個 */
-            gap: 8px;
-        }
-
+        .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .size-box {
-            background: #f5f5f7;
-            border-radius: 8px;
-            padding: 8px 4px;
-            text-align: center;
-            position: relative;
-            min-height: 44px; /* 增加點擊區域 */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            background: #f5f5f7; border-radius: 8px; padding: 8px 4px; text-align: center;
+            min-height: 44px; display: flex; flex-direction: column; justify-content: center;
         }
-
-        .size-name { font-size: 13px; font-weight: bold; display: block; margin-bottom: 2px; }
+        .size-name { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
         .stock-num { font-size: 13px; color: var(--primary); font-weight: 600; }
-
         .size-box.out-of-stock { opacity: 0.5; background: #eee; }
         .size-box.out-of-stock .stock-num { color: var(--text-sub); text-decoration: line-through; }
-        
-        /* 高亮剛掃到的那一格 */
-        .size-box.highlight { 
-            border: 2px solid var(--primary); 
-            background: #eef7ff; 
-        }
+        .size-box.highlight { border: 2px solid var(--primary); background: #eef7ff; }
 
-        /* 相機介面 */
-        #camera-modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 999;
-        }
-        .close-camera {
-            position: absolute; top: 20px; right: 20px; color: white;
-            font-size: 24px; z-index: 1000; cursor: pointer;
-            background: rgba(0,0,0,0.5); width: 40px; height: 40px;
-            border-radius: 50%; text-align: center; line-height: 40px;
-        }
-        @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
-    </style>
-</head>
-<body>
-
-    <div class="header-area">
-        <h1>🔍 庫存查詢系統</h1>
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="掃描或輸入單品條碼...">
-            <button class="scan-btn" onclick="startScanner()">📷</button>
-        </div>
-    </div>
-
-    <div id="results">
-        <div style="text-align: center; color: #999; margin-top: 50px;">
-            <p>請點擊相機圖示進行掃描</p>
-            <p style="font-size: 12px; margin-top: 10px;">範例條碼: 999001, 999006...</p>
-        </div>
-    </div>
-
-    <div id="camera-modal">
-        <div class="close-camera" onclick="stopScanner()">✕</div>
-        <div id="reader" style="width:100%; height:100%;"></div>
-    </div>
-
-<script>
-    // --- 1. 定義尺寸排序的「權重」 ---
-    // 數字越小排越前面，沒在表上的會排到最後
-    const sizeOrder = {
-        "XXS": 1, "XS": 2, "S": 3, "M": 4, "L": 5, 
-        "XL": 6, "2XL": 7, "XXL": 7, "3XL": 8, "4XL": 9, "5XL": 10, "6XL": 11, "F": 99
-    };
-
-    // --- 2. 假資料庫 (依照你的欄位名稱) ---
-    // Product_code = Series + Colour + Size
-    const database = [
-        // 第一個系列: Magic T-Shirt (VI = 紫色)
-        { Product_code: "SP52675BMAGIC-VI-S",   Barcode: "999001", Series: "SP52675BMAGIC", Colour: "VI", Size: "S",   Qty: 10 },
-        { Product_code: "SP52675BMAGIC-VI-M",   Barcode: "999002", Series: "SP52675BMAGIC", Colour: "VI", Size: "M",   Qty: 5 },
-        { Product_code: "SP52675BMAGIC-VI-3XL", Barcode: "999003", Series: "SP52675BMAGIC", Colour: "VI", Size: "3XL", Qty: 2 },
-        // 注意：這裡我故意沒放 4XL, 5XL, 6XL，等下畫面應該不會顯示這些格子
-
-        // 同系列: Magic T-Shirt (BK = 黑色)
-        { Product_code: "SP52675BMAGIC-BK-S",   Barcode: "999004", Series: "SP52675BMAGIC", Colour: "BK", Size: "S",   Qty: 0 },
-        { Product_code: "SP52675BMAGIC-BK-M",   Barcode: "999005", Series: "SP52675BMAGIC", Colour: "BK", Size: "M",   Qty: 8 },
-        { Product_code: "SP52675BMAGIC-BK-L",   Barcode: "999006", Series: "SP52675BMAGIC", Colour: "BK", Size: "L",   Qty: 12 },
-        { Product_code: "SP52675BMAGIC-BK-XL",  Barcode: "999007", Series: "SP52675BMAGIC", Colour: "BK", Size: "XL",  Qty: 3 },
-        { Product_code: "SP52675BMAGIC-BK-2XL", Barcode: "999008", Series: "SP52675BMAGIC", Colour: "BK", Size: "2XL", Qty: 1 },
-        // 這裡有到 2XL，所以黑色這區塊會顯示到 2XL，但紫色那區塊不會
-    ];
-
-    const input = document.getElementById('searchInput');
-    const resultsDiv = document.getElementById('results');
-    let html5QrCode;
-
-    // --- 掃描功能 (同前版) ---
-    function startScanner() {
-        document.getElementById('camera-modal').style.display = 'block';
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: {width: 250, height: 250} }, 
-            (decodedText) => {
-                stopScanner();
-                input.value = decodedText;
-                handleSearch(decodedText);
-            })
-            .catch(err => {
-                alert("無法啟動相機 (請確認使用 HTTPS 或 localhost)");
-                stopScanner();
-            });
-    }
-
-    function stopScanner() {
-        if(html5QrCode) {
-            html5QrCode.stop().then(() => {
-                html5QrCode.clear();
-                document.getElementById('camera-modal').style.display = 'none';
-            }).catch(() => { document.getElementById('camera-modal').style.display = 'none'; });
-        } else {
-            document.getElementById('camera-modal').style.display = 'none';
-        }
-    }
-
-    input.addEventListener('keyup', (e) => { if(e.key === 'Enter') handleSearch(input.value); });
-
-    // --- 核心搜尋邏輯 ---
-    function handleSearch(query) {
-        query = query.trim();
-        if (!query) return;
-
-        // 1. 先用 Barcode 精準找
-        let targetItem = database.find(item => item.Barcode === query);
-        let relatedItems = [];
-
-        if (targetItem) {
-            // 2. 找到單品後，用它的 Series 把全家族抓出來
-            relatedItems = database.filter(item => item.Series === targetItem.Series);
-        } else {
-            // 3. 備用：如果 Barcode 找不到，試著找 Series 欄位 (模糊搜尋)
-            relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query));
-            if(relatedItems.length > 0) targetItem = relatedItems[0];
-        }
-
-        renderView(targetItem, relatedItems, query);
-    }
-
-    function renderView(mainItem, items, query) {
-        if (!items || items.length === 0) {
-            resultsDiv.innerHTML = `<div style="text-align:center; padding:40px;">找不到資料</div>`;
-            return;
-        }
-
-        // 依照 Colour 分組
-        const groupedByColor = {};
-        items.forEach(item => {
-            if (!groupedByColor[item.Colour]) groupedByColor[item.Colour] = [];
-            groupedByColor[item.Colour].push(item);
-        });
-
-        let html = `
-            <div class="product-card">
-                <div class="card-header">
-                    <h2 class="card-title">${mainItem ? mainItem.Series : items[0].Series}</h2>
-                    <div class="card-subtitle">
-                        <span>總共有 ${Object.keys(groupedByColor).length} 色</span>
-                        <span>(點擊方塊查看)</span>
-                    </div>
-                </div>
-        `;
-
-        for (const [color, variants] of Object.entries(groupedByColor)) {
-            // 簡單的顏色判斷，可以之後改成讀對照表
-            let dotBg = '#ccc';
-            if(color === 'BK') dotBg = '#333';
-            if(color === 'VI') dotBg = '#8A2BE2'; // 紫色
-            if(color === 'WH') dotBg = '#fff';
-
-            // --- 關鍵修改：尺寸排序 ---
-            // 這裡會把 variants (該顏色的所有單品) 依照 sizeOrder 重新排隊
-            variants.sort((a, b) => {
-                const valA = sizeOrder[a.Size] || 99; // 如果沒在表內就排最後
-                const valB = sizeOrder[b.Size] || 99;
-                return valA - valB;
-            });
-
-            html += `
-                <div class="color-group">
-                    <div class="color-title">
-                        <span class="color-dot" style="background:${dotBg}"></span>
-                        ${color}
-                    </div>
-                    <div class="size-grid">
-            `;
-            
-            // --- 動態產生格子 ---
-            // 因為 variants 裡面只會有「資料庫裡有的尺寸」，
-            // 所以 5XL/6XL 如果不在 database 陣列裡，這裡就不會跑迴圈，自然就不會畫出來。
-            variants.forEach(v => {
-                const isHighlight = v.Barcode === query;
-                const isOOS = v.Qty === 0; // 庫存為 0
-
-                html += `
-                    <div class="size-box ${isOOS ? 'out-of-stock' : ''} ${isHighlight ? 'highlight' : ''}">
-                        <span class="size-name">${v.Size}</span>
-                        <span class="stock-num">${v.Qty}</span>
-                    </div>
-                `;
-            });
-
-            html += `</div></div>`;
-        }
-        html += `</div>`;
-        resultsDiv.innerHTML = html;
-    }
-</script>
-
-</body>
-</html>
+        #camera-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; }
+        .close-camera { position: absolute; top: 20px; right: 20px; color: white; font-size: 24px; z-index: 1000; cursor: pointer; background: rgba(0,0,0,0.5); width: 40px; height: 40px; border-radius: 50%; text-align: center; line-height: 40px; }
+        @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform:
