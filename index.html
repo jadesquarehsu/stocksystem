@@ -80,4 +80,173 @@
 
         #camera-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; }
         .close-camera { position: absolute; top: 20px; right: 20px; color: white; font-size: 24px; z-index: 1000; cursor: pointer; background: rgba(0,0,0,0.5); width: 40px; height: 40px; border-radius: 50%; text-align: center; line-height: 40px; }
-        @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform:
+        @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
+    </style>
+</head>
+<body>
+
+    <div class="header-area">
+        <h1>🔍 庫存查詢系統</h1>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="掃描或輸入單品條碼...">
+            <button class="scan-btn" onclick="startScanner()">📷</button>
+        </div>
+    </div>
+
+    <div id="results">
+        <div style="text-align: center; color: #999; margin-top: 50px;">
+            <p>請點擊相機圖示進行掃描</p>
+            <p style="font-size: 12px; margin-top: 10px;">範例條碼: 999001</p>
+        </div>
+    </div>
+
+    <div id="camera-modal">
+        <div class="close-camera" onclick="stopScanner()">✕</div>
+        <div id="reader" style="width:100%; height:100%;"></div>
+    </div>
+
+<script>
+    const sizeOrder = {
+        "XXS": 1, "XS": 2, "S": 3, "M": 4, "L": 5, 
+        "XL": 6, "2XL": 7, "XXL": 7, "3XL": 8, "4XL": 9, "5XL": 10, "6XL": 11, "F": 99
+    };
+
+    // --- 假資料：新增了 Price 欄位 ---
+    const database = [
+        // Magic T-Shirt (VI = 紫色)
+        { Product_code: "SP52675BMAGIC-VI-S",   Barcode: "999001", Series: "SP52675BMAGIC", Colour: "VI", Size: "S",   Qty: 10, Price: 1280 },
+        { Product_code: "SP52675BMAGIC-VI-M",   Barcode: "999002", Series: "SP52675BMAGIC", Colour: "VI", Size: "M",   Qty: 5,  Price: 1280 },
+        { Product_code: "SP52675BMAGIC-VI-3XL", Barcode: "999003", Series: "SP52675BMAGIC", Colour: "VI", Size: "3XL", Qty: 2,  Price: 1480 }, // 假設大尺碼貴一點
+
+        // Magic T-Shirt (BK = 黑色)
+        { Product_code: "SP52675BMAGIC-BK-S",   Barcode: "999004", Series: "SP52675BMAGIC", Colour: "BK", Size: "S",   Qty: 0,  Price: 1280 },
+        { Product_code: "SP52675BMAGIC-BK-M",   Barcode: "999005", Series: "SP52675BMAGIC", Colour: "BK", Size: "M",   Qty: 8,  Price: 1280 },
+        { Product_code: "SP52675BMAGIC-BK-L",   Barcode: "999006", Series: "SP52675BMAGIC", Colour: "BK", Size: "L",   Qty: 12, Price: 1280 },
+        { Product_code: "SP52675BMAGIC-BK-XL",  Barcode: "999007", Series: "SP52675BMAGIC", Colour: "BK", Size: "XL",  Qty: 3,  Price: 1280 },
+        { Product_code: "SP52675BMAGIC-BK-2XL", Barcode: "999008", Series: "SP52675BMAGIC", Colour: "BK", Size: "2XL", Qty: 1,  Price: 1280 },
+    ];
+
+    const input = document.getElementById('searchInput');
+    const resultsDiv = document.getElementById('results');
+    let html5QrCode;
+
+    function startScanner() {
+        document.getElementById('camera-modal').style.display = 'block';
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: {width: 250, height: 250} }, 
+            (decodedText) => {
+                stopScanner();
+                input.value = decodedText;
+                handleSearch(decodedText);
+            })
+            .catch(err => {
+                alert("無法啟動相機 (請確認使用 HTTPS 或 localhost)");
+                stopScanner();
+            });
+    }
+
+    function stopScanner() {
+        if(html5QrCode) {
+            html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+                document.getElementById('camera-modal').style.display = 'none';
+            }).catch(() => { document.getElementById('camera-modal').style.display = 'none'; });
+        } else {
+            document.getElementById('camera-modal').style.display = 'none';
+        }
+    }
+
+    input.addEventListener('keyup', (e) => { if(e.key === 'Enter') handleSearch(input.value); });
+
+    function handleSearch(query) {
+        query = query.trim();
+        if (!query) return;
+
+        let targetItem = database.find(item => item.Barcode === query);
+        let relatedItems = [];
+
+        if (targetItem) {
+            relatedItems = database.filter(item => item.Series === targetItem.Series);
+        } else {
+            relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query));
+            if(relatedItems.length > 0) targetItem = relatedItems[0];
+        }
+
+        renderView(targetItem, relatedItems, query);
+    }
+
+    function renderView(mainItem, items, query) {
+        if (!items || items.length === 0) {
+            resultsDiv.innerHTML = `<div style="text-align:center; padding:40px;">找不到資料</div>`;
+            return;
+        }
+
+        const groupedByColor = {};
+        items.forEach(item => {
+            if (!groupedByColor[item.Colour]) groupedByColor[item.Colour] = [];
+            groupedByColor[item.Colour].push(item);
+        });
+
+        // 取得價格 (如果有的話，加上千分位逗號)
+        // 邏輯：優先顯示剛掃到的那個商品的價格，如果沒掃到具體單品，就顯示系列第一件的價格
+        let priceDisplay = "---";
+        const currentItem = mainItem || items[0];
+        if (currentItem.Price) {
+            priceDisplay = "NT$ " + currentItem.Price.toLocaleString();
+        }
+
+        let html = `
+            <div class="product-card">
+                <div class="card-header">
+                    <div class="title-row">
+                        <h2 class="card-title">${currentItem.Series}</h2>
+                        <span class="price-tag">${priceDisplay}</span>
+                    </div>
+                    <div class="card-subtitle">
+                        <span>總共有 ${Object.keys(groupedByColor).length} 色</span>
+                    </div>
+                </div>
+        `;
+
+        for (const [color, variants] of Object.entries(groupedByColor)) {
+            let dotBg = '#ccc';
+            if(color === 'BK') dotBg = '#333';
+            if(color === 'VI') dotBg = '#8A2BE2'; 
+            if(color === 'WH') dotBg = '#fff';
+
+            variants.sort((a, b) => {
+                const valA = sizeOrder[a.Size] || 99;
+                const valB = sizeOrder[b.Size] || 99;
+                return valA - valB;
+            });
+
+            html += `
+                <div class="color-group">
+                    <div class="color-title">
+                        <span class="color-dot" style="background:${dotBg}"></span>
+                        ${color}
+                    </div>
+                    <div class="size-grid">
+            `;
+            
+            variants.forEach(v => {
+                const isHighlight = v.Barcode === query;
+                const isOOS = v.Qty === 0;
+
+                html += `
+                    <div class="size-box ${isOOS ? 'out-of-stock' : ''} ${isHighlight ? 'highlight' : ''}">
+                        <span class="size-name">${v.Size}</span>
+                        <span class="stock-num">${v.Qty}</span>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+        html += `</div>`;
+        resultsDiv.innerHTML = html;
+    }
+</script>
+
+</body>
+</html>
