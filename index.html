@@ -3,75 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>庫存查詢 (含價格)</title>
+    <title>庫存查詢 (黑色價格版)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
             --primary: #0071e3;
             --bg: #f2f2f7;
             --card-bg: #ffffff;
-            --text-main: #1d1d1f;
+            --text-main: #1d1d1f; /* 深黑色主色調 */
             --text-sub: #86868b;
-            --price-color: #d70015; /* 價格用顯眼的紅色 */
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             background-color: var(--bg);
             margin: 0;
             padding: 20px;
             color: var(--text-main);
-            -webkit-tap-highlight-color: transparent;
         }
 
-        .header-area {
-            position: sticky; top: 0; background-color: var(--bg); padding-bottom: 10px; z-index: 10;
-        }
-        .search-box {
-            display: flex; gap: 10px; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
+        .header-area { position: sticky; top: 0; background-color: var(--bg); padding-bottom: 10px; z-index: 10; }
+        .search-box { display: flex; gap: 10px; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         input { flex: 1; border: none; font-size: 16px; outline: none; background: transparent; }
         .scan-btn { background: none; border: none; font-size: 22px; cursor: pointer; }
 
-        /* 商品卡片 */
-        .product-card {
-            background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08); animation: fadeIn 0.3s ease;
-        }
-
-        .card-header {
-            border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
-        }
-
-        /* 標題與價格的排版容器 */
-        .title-row {
-            display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
-        }
-
-        .card-title {
-            font-size: 1.1rem; font-weight: 700; margin: 0; word-break: break-all;
-            flex: 1; /* 讓標題佔據剩下的空間 */
-        }
-
-        /* 價格樣式 */
+        .product-card { background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .card-header { border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        
+        /* 標題與價格排版 */
+        .title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .card-title { font-size: 1.1rem; font-weight: 700; margin: 0; word-break: break-all; flex: 1; }
+        
+        /* 修改這裡：價格樣式 */
         .price-tag {
-            font-size: 1.2rem; font-weight: 800; color: var(--price-color);
-            white-space: nowrap; /* 價格不換行 */
+            font-size: 1.1rem;
+            font-weight: bold; /* 改回標準粗體 */
+            color: var(--text-main); /* 跟隨主色調 (黑色) */
+            white-space: nowrap;
         }
 
-        .card-subtitle {
-            font-size: 0.9rem; color: var(--text-sub); margin-top: 5px;
-        }
+        .card-subtitle { font-size: 0.9rem; color: var(--text-sub); margin-top: 5px; }
 
         .color-group { margin-bottom: 20px; }
         .color-title { font-size: 1rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #ddd; display: inline-block; background: #ccc; }
 
         .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .size-box {
-            background: #f5f5f7; border-radius: 8px; padding: 8px 4px; text-align: center;
-            min-height: 44px; display: flex; flex-direction: column; justify-content: center;
-        }
+        .size-box { background: #f5f5f7; border-radius: 8px; padding: 8px 4px; text-align: center; min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
         .size-name { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
         .stock-num { font-size: 13px; color: var(--primary); font-weight: 600; }
         .size-box.out-of-stock { opacity: 0.5; background: #eee; }
@@ -80,7 +58,6 @@
 
         #camera-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; }
         .close-camera { position: absolute; top: 20px; right: 20px; color: white; font-size: 24px; z-index: 1000; cursor: pointer; background: rgba(0,0,0,0.5); width: 40px; height: 40px; border-radius: 50%; text-align: center; line-height: 40px; }
-        @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
     </style>
 </head>
 <body>
@@ -106,24 +83,18 @@
     </div>
 
 <script>
-    const sizeOrder = {
-        "XXS": 1, "XS": 2, "S": 3, "M": 4, "L": 5, 
-        "XL": 6, "2XL": 7, "XXL": 7, "3XL": 8, "4XL": 9, "5XL": 10, "6XL": 11, "F": 99
-    };
+    const sizeOrder = { "XXS": 1, "XS": 2, "S": 3, "M": 4, "L": 5, "XL": 6, "2XL": 7, "XXL": 7, "3XL": 8, "4XL": 9, "5XL": 10, "6XL": 11, "F": 99 };
 
-    // --- 假資料：新增了 Price 欄位 ---
+    // --- 假資料 ---
     const database = [
-        // Magic T-Shirt (VI = 紫色)
         { Product_code: "SP52675BMAGIC-VI-S",   Barcode: "999001", Series: "SP52675BMAGIC", Colour: "VI", Size: "S",   Qty: 10, Price: 1280 },
         { Product_code: "SP52675BMAGIC-VI-M",   Barcode: "999002", Series: "SP52675BMAGIC", Colour: "VI", Size: "M",   Qty: 5,  Price: 1280 },
-        { Product_code: "SP52675BMAGIC-VI-3XL", Barcode: "999003", Series: "SP52675BMAGIC", Colour: "VI", Size: "3XL", Qty: 2,  Price: 1480 }, // 假設大尺碼貴一點
-
-        // Magic T-Shirt (BK = 黑色)
+        { Product_code: "SP52675BMAGIC-VI-3XL", Barcode: "999003", Series: "SP52675BMAGIC", Colour: "VI", Size: "3XL", Qty: 2,  Price: 1480 },
         { Product_code: "SP52675BMAGIC-BK-S",   Barcode: "999004", Series: "SP52675BMAGIC", Colour: "BK", Size: "S",   Qty: 0,  Price: 1280 },
         { Product_code: "SP52675BMAGIC-BK-M",   Barcode: "999005", Series: "SP52675BMAGIC", Colour: "BK", Size: "M",   Qty: 8,  Price: 1280 },
         { Product_code: "SP52675BMAGIC-BK-L",   Barcode: "999006", Series: "SP52675BMAGIC", Colour: "BK", Size: "L",   Qty: 12, Price: 1280 },
         { Product_code: "SP52675BMAGIC-BK-XL",  Barcode: "999007", Series: "SP52675BMAGIC", Colour: "BK", Size: "XL",  Qty: 3,  Price: 1280 },
-        { Product_code: "SP52675BMAGIC-BK-2XL", Barcode: "999008", Series: "SP52675BMAGIC", Colour: "BK", Size: "2XL", Qty: 1,  Price: 1280 },
+        { Product_code: "SP52675BMAGIC-BK-2XL", Barcode: "999008", Series: "SP52675BMAGIC", Colour: "BK", Size: "2XL", Qty: 1,  Price: 1280 }
     ];
 
     const input = document.getElementById('searchInput');
@@ -134,66 +105,36 @@
         document.getElementById('camera-modal').style.display = 'block';
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: {width: 250, height: 250} }, 
-            (decodedText) => {
-                stopScanner();
-                input.value = decodedText;
-                handleSearch(decodedText);
-            })
-            .catch(err => {
-                alert("無法啟動相機 (請確認使用 HTTPS 或 localhost)");
-                stopScanner();
-            });
+            (decodedText) => { stopScanner(); input.value = decodedText; handleSearch(decodedText); })
+            .catch(err => { alert("無法啟動相機"); stopScanner(); });
     }
 
     function stopScanner() {
-        if(html5QrCode) {
-            html5QrCode.stop().then(() => {
-                html5QrCode.clear();
-                document.getElementById('camera-modal').style.display = 'none';
-            }).catch(() => { document.getElementById('camera-modal').style.display = 'none'; });
-        } else {
-            document.getElementById('camera-modal').style.display = 'none';
-        }
+        if(html5QrCode) { html5QrCode.stop().then(() => { html5QrCode.clear(); document.getElementById('camera-modal').style.display = 'none'; }).catch(() => { document.getElementById('camera-modal').style.display = 'none'; }); } else { document.getElementById('camera-modal').style.display = 'none'; }
     }
 
     input.addEventListener('keyup', (e) => { if(e.key === 'Enter') handleSearch(input.value); });
 
     function handleSearch(query) {
-        query = query.trim();
-        if (!query) return;
-
+        query = query.trim(); if (!query) return;
         let targetItem = database.find(item => item.Barcode === query);
         let relatedItems = [];
 
-        if (targetItem) {
-            relatedItems = database.filter(item => item.Series === targetItem.Series);
-        } else {
-            relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query));
-            if(relatedItems.length > 0) targetItem = relatedItems[0];
-        }
+        if (targetItem) { relatedItems = database.filter(item => item.Series === targetItem.Series); } 
+        else { relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query)); if(relatedItems.length > 0) targetItem = relatedItems[0]; }
 
         renderView(targetItem, relatedItems, query);
     }
 
     function renderView(mainItem, items, query) {
-        if (!items || items.length === 0) {
-            resultsDiv.innerHTML = `<div style="text-align:center; padding:40px;">找不到資料</div>`;
-            return;
-        }
+        if (!items || items.length === 0) { resultsDiv.innerHTML = `<div style="text-align:center; padding:40px;">找不到資料</div>`; return; }
 
         const groupedByColor = {};
-        items.forEach(item => {
-            if (!groupedByColor[item.Colour]) groupedByColor[item.Colour] = [];
-            groupedByColor[item.Colour].push(item);
-        });
+        items.forEach(item => { if (!groupedByColor[item.Colour]) groupedByColor[item.Colour] = []; groupedByColor[item.Colour].push(item); });
 
-        // 取得價格 (如果有的話，加上千分位逗號)
-        // 邏輯：優先顯示剛掃到的那個商品的價格，如果沒掃到具體單品，就顯示系列第一件的價格
         let priceDisplay = "---";
         const currentItem = mainItem || items[0];
-        if (currentItem.Price) {
-            priceDisplay = "NT$ " + currentItem.Price.toLocaleString();
-        }
+        if (currentItem.Price) { priceDisplay = "NT$ " + currentItem.Price.toLocaleString(); }
 
         let html = `
             <div class="product-card">
@@ -209,16 +150,9 @@
         `;
 
         for (const [color, variants] of Object.entries(groupedByColor)) {
-            let dotBg = '#ccc';
-            if(color === 'BK') dotBg = '#333';
-            if(color === 'VI') dotBg = '#8A2BE2'; 
-            if(color === 'WH') dotBg = '#fff';
-
-            variants.sort((a, b) => {
-                const valA = sizeOrder[a.Size] || 99;
-                const valB = sizeOrder[b.Size] || 99;
-                return valA - valB;
-            });
+            let dotBg = '#ccc'; if(color === 'BK') dotBg = '#333'; if(color === 'VI') dotBg = '#8A2BE2'; if(color === 'WH') dotBg = '#fff';
+            
+            variants.sort((a, b) => { const valA = sizeOrder[a.Size] || 99; const valB = sizeOrder[b.Size] || 99; return valA - valB; });
 
             html += `
                 <div class="color-group">
@@ -232,7 +166,6 @@
             variants.forEach(v => {
                 const isHighlight = v.Barcode === query;
                 const isOOS = v.Qty === 0;
-
                 html += `
                     <div class="size-box ${isOOS ? 'out-of-stock' : ''} ${isHighlight ? 'highlight' : ''}">
                         <span class="size-name">${v.Size}</span>
@@ -247,6 +180,5 @@
         resultsDiv.innerHTML = html;
     }
 </script>
-
 </body>
 </html>
