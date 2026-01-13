@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>庫存查詢 (iOS 優化版)</title>
+    <title>庫存查詢 (黑色價格版)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
             --primary: #0071e3;
             --bg: #f2f2f7;
             --card-bg: #ffffff;
-            --text-main: #1d1d1f;
+            --text-main: #1d1d1f; /* 深黑色主色調 */
             --text-sub: #86868b;
         }
 
@@ -30,13 +30,15 @@
         .product-card { background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
         
+        /* 標題與價格排版 */
         .title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
         .card-title { font-size: 1.1rem; font-weight: 700; margin: 0; word-break: break-all; flex: 1; }
         
+        /* 修改這裡：價格樣式 */
         .price-tag {
             font-size: 1.1rem;
-            font-weight: bold;
-            color: var(--text-main);
+            font-weight: bold; /* 改回標準粗體 */
+            color: var(--text-main); /* 跟隨主色調 (黑色) */
             white-space: nowrap;
         }
 
@@ -99,59 +101,16 @@
     const resultsDiv = document.getElementById('results');
     let html5QrCode;
 
-    // --- 修改後的掃描啟動功能 (針對 iOS 優化) ---
     function startScanner() {
         document.getElementById('camera-modal').style.display = 'block';
-        
-        // 確保先清除舊實例
-        if (html5QrCode) {
-            html5QrCode.clear().catch(err => console.log("Clear failed", err));
-        }
-
         html5QrCode = new Html5Qrcode("reader");
-
-        // 針對 Apple 手機的優化參數
-        const constraints = { 
-            facingMode: "environment", // 後鏡頭
-            // 限制解析度，避免 4K 導致 iPhone 卡頓
-            width: { min: 640, ideal: 720, max: 1280 },
-            height: { min: 480, ideal: 720, max: 960 }
-        };
-
-        const config = { 
-            fps: 10, // 降低每秒掃描次數
-            qrbox: { width: 250, height: 250 }, 
-            aspectRatio: 1.0 // 鎖定比例
-        };
-        
-        html5QrCode.start(
-            constraints, 
-            config, 
-            (decodedText) => { 
-                // 掃描成功
-                stopScanner(); 
-                input.value = decodedText; 
-                handleSearch(decodedText); 
-            }
-        ).catch(err => { 
-            console.error(err);
-            alert("相機啟動失敗：\n1. 請確認已允許相機權限\n2. 確保網址是 https 開頭\n3. iPhone 請使用 Safari 瀏覽器"); 
-            stopScanner(); 
-        });
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: {width: 250, height: 250} }, 
+            (decodedText) => { stopScanner(); input.value = decodedText; handleSearch(decodedText); })
+            .catch(err => { alert("無法啟動相機"); stopScanner(); });
     }
 
     function stopScanner() {
-        if(html5QrCode) { 
-            html5QrCode.stop().then(() => { 
-                html5QrCode.clear(); 
-                document.getElementById('camera-modal').style.display = 'none'; 
-            }).catch((err) => { 
-                console.log("Stop failed", err);
-                document.getElementById('camera-modal').style.display = 'none'; 
-            }); 
-        } else { 
-            document.getElementById('camera-modal').style.display = 'none'; 
-        }
+        if(html5QrCode) { html5QrCode.stop().then(() => { html5QrCode.clear(); document.getElementById('camera-modal').style.display = 'none'; }).catch(() => { document.getElementById('camera-modal').style.display = 'none'; }); } else { document.getElementById('camera-modal').style.display = 'none'; }
     }
 
     input.addEventListener('keyup', (e) => { if(e.key === 'Enter') handleSearch(input.value); });
