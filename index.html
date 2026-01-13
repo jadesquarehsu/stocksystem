@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>庫存查詢 (變焦對焦版)</title>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <title>庫存查詢 (拍照辨識版)</title>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <style>
         :root {
             --primary: #0071e3;
@@ -25,7 +25,23 @@
         .header-area { position: sticky; top: 0; background-color: var(--bg); padding-bottom: 10px; z-index: 10; }
         .search-box { display: flex; gap: 10px; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         input { flex: 1; border: none; font-size: 16px; outline: none; background: transparent; }
-        .scan-btn { background: none; border: none; font-size: 22px; cursor: pointer; }
+        
+        /* 改造按鈕為「拍照」樣式 */
+        .scan-btn { 
+            background: var(--primary); 
+            color: white;
+            border: none; 
+            font-size: 16px; 
+            padding: 0 15px;
+            border-radius: 8px;
+            cursor: pointer; 
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 隱藏實際的 file input */
+        #cameraInput { display: none; }
 
         .product-card { background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .card-header { border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
@@ -47,19 +63,12 @@
         .size-box.out-of-stock .stock-num { color: var(--text-sub); text-decoration: line-through; }
         .size-box.highlight { border: 2px solid var(--primary); background: #eef7ff; }
 
-        #camera-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; }
-        .close-camera { position: absolute; top: 30px; right: 30px; color: white; font-size: 28px; z-index: 1000; cursor: pointer; background: rgba(0,0,0,0.6); width: 44px; height: 44px; border-radius: 50%; text-align: center; line-height: 44px; }
-        
-        /* 變焦滑桿區域 */
-        #zoom-controls { 
-            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); 
-            width: 80%; display: none; z-index: 1001; text-align: center;
-        }
-        #zoom-slider { -webkit-appearance: none; width: 100%; height: 6px; background: rgba(255,255,255,0.3); outline: none; border-radius: 3px; }
-        #zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; background: white; border-radius: 50%; cursor: pointer; }
-        .zoom-label { color: white; margin-bottom: 8px; display: block; font-size: 14px; text-shadow: 0 1px 2px black; }
-
-        #scan-status { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(255,255,255,0.7); font-size: 13px; pointer-events: none; }
+        /* 讀取中的遮罩 */
+        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; flex-direction: column; justify-content: center; align-items: center; color: white; }
+        .spinner { border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 4px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-text { font-size: 16px; font-weight: 500; }
+        #loading-sub { font-size: 12px; color: #ccc; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -67,28 +76,25 @@
     <div class="header-area">
         <h1>🔍 庫存查詢系統</h1>
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="掃描或輸入單品條碼...">
-            <button class="scan-btn" onclick="startScanner()">📷</button>
+            <input type="text" id="searchInput" placeholder="輸入商品條碼或編號...">
+            <button class="scan-btn" onclick="document.getElementById('cameraInput').click()">
+                📷 <span>拍照</span>
+            </button>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processImage(this)">
         </div>
     </div>
 
     <div id="results">
         <div style="text-align: center; color: #999; margin-top: 50px;">
-            <p>請點擊相機圖示進行掃描</p>
-            <p style="font-size: 12px; margin-top: 10px;">💡 技巧：拿遠一點，再用滑桿放大</p>
+            <p>請點擊「拍照」按鈕</p>
+            <p style="font-size: 12px; margin-top: 10px;">將自動辨識照片中的<br>條碼數字或商品編號</p>
         </div>
     </div>
 
-    <div id="camera-modal">
-        <div class="close-camera" onclick="stopScanner()">✕</div>
-        <div id="reader" style="width:100%; height:100%;"></div>
-        
-        <div id="zoom-controls">
-            <span class="zoom-label">變焦放大 (解決對焦問題)</span>
-            <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1">
-        </div>
-
-        <div id="scan-status">啟動相機中...</div>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">正在分析照片...</div>
+        <div id="loading-sub">AI 辨識文字中，請稍候</div>
     </div>
 
 <script>
@@ -108,104 +114,95 @@
 
     const input = document.getElementById('searchInput');
     const resultsDiv = document.getElementById('results');
-    const statusText = document.getElementById('scan-status');
-    const zoomControls = document.getElementById('zoom-controls');
-    const zoomSlider = document.getElementById('zoom-slider');
-    
-    let html5QrCode;
-    let currentZoom = 1;
-
-    function startScanner() {
-        document.getElementById('camera-modal').style.display = 'block';
-        statusText.innerText = "正在啟動...";
-        zoomControls.style.display = 'none'; // 先隱藏
-
-        const config = {
-            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-            formatsToSupport: [ 
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.UPC_A
-            ]
-        };
-        
-        html5QrCode = new Html5Qrcode("reader", config);
-
-        // 使用較保守的設定以確保相容性
-        const cameraConfig = { facingMode: "environment" };
-        const scanConfig = { fps: 20, qrbox: { width: 260, height: 120 } };
-
-        html5QrCode.start(cameraConfig, scanConfig, 
-            (decodedText) => { 
-                stopScanner();
-                if (navigator.vibrate) navigator.vibrate(200);
-                input.value = decodedText; 
-                handleSearch(decodedText); 
-            },
-            (errorMessage) => {
-                // 掃描中...不處理錯誤
-            }
-        ).then(() => {
-            // --- 啟動成功後，檢查是否支援變焦 ---
-            statusText.innerText = "相機已啟動。請將條碼置於框內";
-            
-            // 延遲一點點讀取相機能力
-            setTimeout(() => {
-                const videoTrack = html5QrCode.getRunningTrackCameraCapabilities();
-                const settings = html5QrCode.getRunningTrackSettings();
-                
-                // 檢查瀏覽器回傳的變焦能力
-                // 注意：iOS Safari 17+ 支援 zoom，但舊版可能不支援
-                // 這裡做一個簡單的特徵檢測
-                if (videoTrack && 'zoom' in videoTrack) {
-                    zoomControls.style.display = 'block';
-                    zoomSlider.min = videoTrack.zoom.min;
-                    zoomSlider.max = videoTrack.zoom.max;
-                    zoomSlider.step = videoTrack.zoom.step || 0.1;
-                    zoomSlider.value = settings.zoom || 1;
-                    
-                    // 綁定滑桿事件
-                    zoomSlider.oninput = function() {
-                        html5QrCode.applyVideoConstraints({
-                            zoom: parseFloat(this.value)
-                        });
-                    };
-                } else {
-                    statusText.innerText += " (此裝置不支援網頁變焦)";
-                }
-            }, 500);
-
-        }).catch(err => {
-            statusText.innerText = "啟動失敗，請重新整理";
-            alert("相機啟動失敗：" + err);
-            stopScanner();
-        });
-    }
-
-    function stopScanner() {
-        if(html5QrCode) { 
-            html5QrCode.stop().then(() => { 
-                html5QrCode.clear(); 
-                document.getElementById('camera-modal').style.display = 'none'; 
-            }).catch(() => { 
-                document.getElementById('camera-modal').style.display = 'none'; 
-            }); 
-        } else { 
-            document.getElementById('camera-modal').style.display = 'none'; 
-        }
-    }
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
 
     input.addEventListener('keyup', (e) => { if(e.key === 'Enter') handleSearch(input.value); });
 
-    function handleSearch(query) {
-        query = query.trim(); if (!query) return;
+    // --- 核心：影像處理與辨識 ---
+    function processImage(inputElement) {
+        if (inputElement.files && inputElement.files[0]) {
+            const file = inputElement.files[0];
+            
+            // 顯示讀取畫面
+            loadingOverlay.style.display = 'flex';
+            loadingText.innerText = "正在分析照片...";
+
+            // 使用 Tesseract.js 進行辨識
+            Tesseract.recognize(
+                file,
+                'eng', // 使用英文模式 (包含數字)
+                {
+                    logger: m => {
+                        // 這裡可以看進度，例如 "recognizing text: 50%"
+                        if(m.status === 'recognizing text') {
+                            loadingText.innerText = `辨識進度: ${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                }
+            ).then(({ data: { text } }) => {
+                console.log("辨識結果原始文字:", text);
+                
+                // --- 智能清洗資料 ---
+                // 1. 移除空白與雜訊
+                // 2. 嘗試找出符合 Barcode (純數字 6碼以上) 或 Product Code (英文+數字) 的片段
+                const cleanText = text.replace(/\s+/g, ''); // 移除所有空白
+                const potentialCodes = text.match(/[A-Z0-9-]{5,}/g); // 抓取長度大於5的英文數字組合
+
+                loadingOverlay.style.display = 'none';
+
+                if (potentialCodes && potentialCodes.length > 0) {
+                    // 找到最像的一個 (這裡簡單取第一個，或您可以加入更複雜的邏輯)
+                    // 我們會嘗試搜尋每一個抓到的片段，直到找到為止
+                    let found = false;
+                    for (let code of potentialCodes) {
+                        // 移除常見的辨識錯誤雜訊 (例如把邊框辨識成 I 或 l)
+                        const refinedCode = code.trim();
+                        if (searchAndRender(refinedCode)) {
+                            input.value = refinedCode;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        alert(`有辨識到文字：\n${potentialCodes.join(", ")}\n但資料庫中找不到對應商品。`);
+                    }
+                } else {
+                    alert("照片中無法辨識出明顯的條碼或編號，請再試一次 (請盡量靠近文字)。");
+                }
+            }).catch(err => {
+                console.error(err);
+                loadingOverlay.style.display = 'none';
+                alert("辨識發生錯誤，請重試");
+            });
+        }
+        // 清空 input 讓同一張圖可以重複選
+        inputElement.value = ''; 
+    }
+
+    // 搜尋並回傳是否找到，用於迴圈判斷
+    function searchAndRender(query) {
+        query = query.trim();
         let targetItem = database.find(item => item.Barcode === query);
         let relatedItems = [];
 
-        if (targetItem) { relatedItems = database.filter(item => item.Series === targetItem.Series); } 
-        else { relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query)); if(relatedItems.length > 0) targetItem = relatedItems[0]; }
+        if (targetItem) {
+            relatedItems = database.filter(item => item.Series === targetItem.Series);
+        } else {
+            // 模糊搜尋
+            relatedItems = database.filter(item => item.Series.includes(query) || item.Product_code.includes(query));
+            if(relatedItems.length > 0) targetItem = relatedItems[0];
+        }
 
-        renderView(targetItem, relatedItems, query);
+        if (targetItem || relatedItems.length > 0) {
+            renderView(targetItem, relatedItems, query);
+            return true;
+        }
+        return false;
+    }
+
+    function handleSearch(query) {
+        searchAndRender(query);
     }
 
     function renderView(mainItem, items, query) {
@@ -246,7 +243,8 @@
             `;
             
             variants.forEach(v => {
-                const isHighlight = v.Barcode === query;
+                // 這裡稍微修改 highlight 邏輯，因為 OCR 出来的字可能不完全等於 Barcode
+                const isHighlight = v.Barcode === query || v.Product_code.includes(query);
                 const isOOS = v.Qty === 0;
                 html += `
                     <div class="size-box ${isOOS ? 'out-of-stock' : ''} ${isHighlight ? 'highlight' : ''}">
