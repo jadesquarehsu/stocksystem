@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>庫存查詢 (極速版)</title>
+    <title>庫存查詢 (智慧相容版)</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
@@ -49,8 +49,10 @@
         .size-box.highlight { border: 2px solid var(--primary); background: #eef7ff; }
 
         #camera-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; }
-        /* 修改關閉按鈕位置，避免遮擋視線 */
         .close-camera { position: absolute; top: 30px; right: 30px; color: white; font-size: 28px; z-index: 1000; cursor: pointer; background: rgba(0,0,0,0.6); width: 44px; height: 44px; border-radius: 50%; text-align: center; line-height: 44px; }
+        
+        /* 掃描狀態提示文字 */
+        #scan-status { position: absolute; bottom: 50px; width: 100%; text-align: center; color: white; font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); z-index: 1000; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -66,13 +68,14 @@
     <div id="results">
         <div style="text-align: center; color: #999; margin-top: 50px;">
             <p>請點擊相機圖示進行掃描</p>
-            <p style="font-size: 12px; margin-top: 10px;">⚡️ 極速掃描模式已開啟</p>
+            <p style="font-size: 12px; margin-top: 10px;">系統將自動調整最佳設定</p>
         </div>
     </div>
 
     <div id="camera-modal">
         <div class="close-camera" onclick="stopScanner()">✕</div>
         <div id="reader" style="width:100%; height:100%;"></div>
+        <div id="scan-status">正在啟動相機...</div>
     </div>
 
 <script>
@@ -92,53 +95,57 @@
 
     const input = document.getElementById('searchInput');
     const resultsDiv = document.getElementById('results');
+    const statusText = document.getElementById('scan-status');
     let html5QrCode;
 
     function startScanner() {
         document.getElementById('camera-modal').style.display = 'block';
-
+        statusText.innerText = "正在嘗試極速模式...";
+        
+        // 建立掃描器實體 (啟用硬體加速)
         const config = {
-            // 🚀 關鍵 1: 啟用原生條碼偵測 (Chrome Android / Safari iOS 17+)
-            // 如果瀏覽器支援，這會直接用硬體晶片運算，速度提升 5-10 倍
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-            },
-            // 限制格式，減少運算負擔
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
             formatsToSupport: [ 
                 Html5QrcodeSupportedFormats.CODE_128,
                 Html5QrcodeSupportedFormats.EAN_13,
                 Html5QrcodeSupportedFormats.UPC_A
             ]
         };
-
+        
         html5QrCode = new Html5Qrcode("reader", config);
 
-        const cameraConfig = { 
-            facingMode: "environment",
-            // 關鍵 2: 嘗試請求持續對焦
-            focusMode: "continuous" 
-        };
-
-        // 關鍵 3: 調整掃描參數
-        const scanConfig = { 
-            fps: 25, // 提高偵測幀率 (原本是 10)
-            qrbox: { width: 300, height: 150 }, // 加寬掃描區
-            aspectRatio: 1.0,
+        // --- 策略 1: 優先嘗試極速設定 (高FPS) ---
+        // 關鍵修改：拿掉 aspectRatio，這在 iOS 很容易導致崩潰
+        const fastConfig = { 
+            fps: 25, 
+            qrbox: { width: 280, height: 100 }, 
             disableFlip: false 
         };
 
-        html5QrCode.start(cameraConfig, scanConfig, 
-            (decodedText) => { 
-                stopScanner(); 
-                // 震動回饋 (如果手機支援)
-                if (navigator.vibrate) navigator.vibrate(200);
-                input.value = decodedText; 
-                handleSearch(decodedText); 
-            }
-        ).catch(err => { 
-            alert("無法啟動相機，請確認權限"); 
-            stopScanner(); 
-        });
+        // 啟動函式 (包裝成函式以便重試)
+        const tryStart = (mode) => {
+            html5QrCode.start({ facingMode: "environment" }, mode === 'fast' ? fastConfig : { fps: 10, qrbox: {width: 250, height: 250} }, 
+                (decodedText) => { 
+                    stopScanner();
+                    if (navigator.vibrate) navigator.vibrate(200);
+                    input.value = decodedText; 
+                    handleSearch(decodedText); 
+                }
+            ).catch(err => {
+                // 如果極速模式失敗，自動降級
+                if(mode === 'fast') {
+                    console.log("極速模式失敗，切換至相容模式...");
+                    statusText.innerText = "切換至相容模式...";
+                    tryStart('safe'); // 遞迴呼叫，改用安全模式
+                } else {
+                    alert("無法啟動相機。請確認：\n1. 已允許相機權限\n2. 網址開頭為 https\n3. 關閉其他使用相機的網頁");
+                    stopScanner();
+                }
+            });
+        };
+
+        // 開始嘗試
+        tryStart('fast');
     }
 
     function stopScanner() {
